@@ -1,30 +1,87 @@
 {
   "expo": {
     "name": "MediMind",
-    "slug": "MediMind",
+    "slug": "medimind",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1D9E75"
     },
+
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.medimind.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "NSCameraUsageDescription": "MediMind uses the camera to scan prescription images and automatically extract medicine names, dosages, and frequencies so you don't have to type them manually.",
+        "NSPhotoLibraryUsageDescription": "MediMind accesses your photo library so you can select a prescription image for scanning.",
+        "NSUserNotificationsUsageDescription": "MediMind sends daily reminders when it's time to take your medicines, and alerts when doses are missed for 2 or more hours.",
+        "NSUserNotificationUsageDescription": "MediMind sends daily reminders when it's time to take your medicines.",
+        "NSContactsUsageDescription": "MediMind can access your contacts to quickly add family members as caregivers.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1D9E75"
       },
+      "package": "com.medimind.app",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.WAKE_LOCK"
+      ]
     },
+
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MediMind uses the camera to scan prescriptions and automatically extract medicine information — so you never have to type it in manually.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#1D9E75",
+          "defaultChannel": "medimind-reminders",
+          "sounds": []
+        }
+      ]
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
     }
   }
 }
