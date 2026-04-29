@@ -7,19 +7,20 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#1D9E75"
     },
-
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.medimind.app",
       "buildNumber": "1",
       "infoPlist": {
-        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "NSCameraUsageDescription": "MediMind uses the camera to scan prescription images and automatically extract medicine names, dosages, and frequencies so you don't have to type them manually.",
         "NSPhotoLibraryUsageDescription": "MediMind accesses your photo library so you can select a prescription image for scanning.",
         "NSUserNotificationsUsageDescription": "MediMind sends daily reminders when it's time to take your medicines, and alerts when doses are missed for 2 or more hours.",
@@ -28,13 +29,11 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1D9E75"
       },
-      "googleServicesFile": "./google-services.json",
       "package": "com.vijay.medimind",
       "versionCode": 1,
       "edgeToEdgeEnabled": true,
@@ -53,11 +52,9 @@
         "android.permission.WAKE_LOCK"
       ]
     },
-
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
     "plugins": [
       "@react-native-community/datetimepicker",
       [
@@ -78,11 +75,11 @@
         }
       ]
     ],
-
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "147d6fe3-61cf-4265-80b2-82078fa55f6e"
       }
-    }
+    },
+    "owner": "vijayasarathy"
   }
 }

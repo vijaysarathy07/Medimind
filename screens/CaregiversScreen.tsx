@@ -19,48 +19,64 @@ import { useToast } from '../contexts/ToastContext';
 
 // ─── types ───────────────────────────────────────────────────
 
+type CaregiverStatus = 'pending' | 'accepted' | 'declined';
+
 type Caregiver = {
   id:           string;
   name:         string;
   phone:        string;
   relationship: string;
+  status:       CaregiverStatus;
   created_at:   string;
 };
 
-type AlertRecord = {
+type PendingRequest = {
   id:           string;
-  sent_at:      string;
-  reason:       string;
-  caregivers:   { name: string };
-  medicines:    { name: string };
+  name:         string;
+  relationship: string;
+  users:        { name: string } | { name: string }[] | null;
+};
+
+type AlertRecord = {
+  id:         string;
+  sent_at:    string;
+  reason:     string;
+  caregivers: { name: string };
+  medicines:  { name: string };
 };
 
 // ─── helpers ─────────────────────────────────────────────────
 
 const INITIAL_COLORS = ['#1D9E75', '#5B6BE8', '#E8845B', '#E8635B', '#5BA3E8', '#9C27B0'];
 
+const STATUS_CONFIG: Record<CaregiverStatus, { label: string; color: string; bg: string }> = {
+  pending:  { label: 'Pending',  color: '#B45309', bg: '#FEF3C7' },
+  accepted: { label: 'Active',   color: Colors.primary, bg: '#D1FAE5' },
+  declined: { label: 'Declined', color: Colors.error,   bg: '#FEE2E2' },
+};
+
 function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
+  return name.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 }
 
 function fmtRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 2)    return 'Just now';
-  if (mins < 60)   return `${mins}m ago`;
+  if (mins < 2)  return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)    return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function fmtAlertTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function getPatientName(users: PendingRequest['users']): string {
+  if (!users) return 'Someone';
+  if (Array.isArray(users)) return users[0]?.name ?? 'Someone';
+  return users.name ?? 'Someone';
 }
 
 const REASON_LABEL: Record<string, string> = {
@@ -76,11 +92,12 @@ function CaregiverCard({
   colorIndex,
   onDelete,
 }: {
-  caregiver:   Caregiver;
-  colorIndex:  number;
-  onDelete:    (id: string) => void;
+  caregiver:  Caregiver;
+  colorIndex: number;
+  onDelete:   (id: string) => void;
 }) {
-  const color = INITIAL_COLORS[colorIndex % INITIAL_COLORS.length];
+  const color  = INITIAL_COLORS[colorIndex % INITIAL_COLORS.length];
+  const status = STATUS_CONFIG[caregiver.status];
 
   function confirmDelete() {
     Alert.alert(
@@ -100,7 +117,12 @@ function CaregiverCard({
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.caregiverName}>{caregiver.name}</Text>
+        <View style={styles.cardNameRow}>
+          <Text style={styles.caregiverName}>{caregiver.name}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          </View>
+        </View>
         <Text style={styles.caregiverRole}>{caregiver.relationship}</Text>
         <View style={styles.cardFooter}>
           <View style={styles.phoneBadge}>
@@ -109,9 +131,47 @@ function CaregiverCard({
         </View>
       </View>
 
-      <TouchableOpacity style={styles.deleteBtn} onPress={confirmDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={confirmDelete}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
         <Text style={styles.deleteBtnText}>✕</Text>
       </TouchableOpacity>
+    </View>
+  );
+}
+
+function PendingRequestCard({
+  request,
+  onAccept,
+  onDecline,
+}: {
+  request:   PendingRequest;
+  onAccept:  (id: string) => void;
+  onDecline: (id: string) => void;
+}) {
+  const patientName = getPatientName(request.users);
+
+  return (
+    <View style={styles.pendingCard}>
+      <View style={styles.pendingIcon}>
+        <Text style={{ fontSize: 22 }}>🔔</Text>
+      </View>
+      <View style={styles.pendingBody}>
+        <Text style={styles.pendingTitle}>{patientName}</Text>
+        <Text style={styles.pendingSub}>
+          wants to add you as their <Text style={styles.pendingRel}>{request.relationship}</Text>
+        </Text>
+        <View style={styles.pendingActions}>
+          <TouchableOpacity style={styles.declineBtn} onPress={() => onDecline(request.id)}>
+            <Text style={styles.declineBtnText}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.acceptBtn} onPress={() => onAccept(request.id)}>
+            <Text style={styles.acceptBtnText}>Accept</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -139,40 +199,55 @@ function AlertRow({ alert }: { alert: AlertRecord }) {
 
 export default function CaregiversScreen() {
   const { showToast } = useToast();
-  const [caregivers,   setCaregivers]   = useState<Caregiver[]>([]);
-  const [alerts,       setAlerts]       = useState<AlertRecord[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [refreshing,   setRefreshing]   = useState(false);
-  const [showModal,    setShowModal]    = useState(false);
-  const [testRunning,  setTestRunning]  = useState(false);
+  const [caregivers,      setCaregivers]      = useState<Caregiver[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [alerts,          setAlerts]          = useState<AlertRecord[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [refreshing,      setRefreshing]      = useState(false);
+  const [showModal,       setShowModal]       = useState(false);
+  const [testRunning,     setTestRunning]     = useState(false);
 
   const fetchData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [caregiverRes, alertRes] = await Promise.all([
+    const [caregiverRes, alertRes, profileRes] = await Promise.all([
       supabase
         .from('caregivers')
-        .select('id, name, phone, relationship, created_at')
+        .select('id, name, phone, relationship, status, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true }),
 
       supabase
         .from('caregiver_alerts')
-        .select(`
-          id,
-          sent_at,
-          reason,
-          caregivers ( name ),
-          medicines  ( name )
-        `)
+        .select(`id, sent_at, reason, caregivers ( name ), medicines ( name )`)
         .eq('user_id', user.id)
         .order('sent_at', { ascending: false })
         .limit(20),
+
+      supabase
+        .from('users')
+        .select('phone')
+        .eq('id', user.id)
+        .single(),
     ]);
 
     if (caregiverRes.data) setCaregivers(caregiverRes.data as Caregiver[]);
-    if (alertRes.data)     setAlerts(alertRes.data    as unknown as AlertRecord[]);
+    if (alertRes.data)     setAlerts(alertRes.data as unknown as AlertRecord[]);
+
+    // Fetch requests directed at the current user (they are the caregiver)
+    if (profileRes.data?.phone) {
+      const last10 = profileRes.data.phone.replace(/\D/g, '').slice(-10);
+      const { data: requests } = await supabase
+        .from('caregivers')
+        .select(`id, name, relationship, users!caregivers_user_id_fkey ( name )`)
+        .eq('status', 'pending')
+        .like('phone', `%${last10}`)
+        .neq('user_id', user.id);
+
+      setPendingRequests((requests ?? []) as unknown as PendingRequest[]);
+    }
+
     setLoading(false);
   }, []);
 
@@ -196,12 +271,47 @@ export default function CaregiversScreen() {
         name:         data.name,
         phone:        data.phone,
         relationship: data.relationship,
+        status:       'pending',
       })
       .select()
       .single();
 
     if (error) throw new Error(error.message);
     setCaregivers((prev) => [...prev, row as Caregiver]);
+
+    // Send consent request notification to the caregiver
+    await supabase.functions.invoke('send-consent-request', {
+      body: { caregiver_id: row.id },
+    });
+  }
+
+  // ── accept / decline ───────────────────────────────────────
+  async function handleAccept(id: string) {
+    const { error } = await supabase
+      .from('caregivers')
+      .update({ status: 'accepted' })
+      .eq('id', id);
+
+    if (error) {
+      showToast({ type: 'error', message: 'Could not accept request.' });
+      return;
+    }
+    setPendingRequests((prev) => prev.filter((r) => r.id !== id));
+    showToast({ type: 'success', message: 'Request accepted! You will now receive alerts.' });
+  }
+
+  async function handleDecline(id: string) {
+    const { error } = await supabase
+      .from('caregivers')
+      .update({ status: 'declined' })
+      .eq('id', id);
+
+    if (error) {
+      showToast({ type: 'error', message: 'Could not decline request.' });
+      return;
+    }
+    setPendingRequests((prev) => prev.filter((r) => r.id !== id));
+    showToast({ type: 'success', message: 'Request declined.' });
   }
 
   // ── delete ─────────────────────────────────────────────────
@@ -215,21 +325,20 @@ export default function CaregiversScreen() {
     showToast({ type: 'success', message: 'Caregiver removed.' });
   }
 
-  // ── test alert (dev helper) ────────────────────────────────
+  // ── test alert ─────────────────────────────────────────────
   async function handleTestAlert() {
     setTestRunning(true);
     try {
       const result = await checkAndSendAlerts();
-
       if (result.status === 'no_user') {
         showToast({ type: 'error', message: 'Not signed in.' });
       } else if (result.status === 'no_overdue_reminders') {
         showToast({ type: 'error', message: 'No overdue doses found. A dose must be pending and missed by 2+ hours today.' });
       } else if (result.status === 'no_caregivers') {
-        showToast({ type: 'error', message: 'No caregivers added yet.' });
+        showToast({ type: 'error', message: 'No accepted caregivers yet.' });
       } else {
         if (result.sent > 0) {
-          showToast({ type: 'success', message: `${result.sent} push notification(s) sent to caregiver(s)!` });
+          showToast({ type: 'success', message: `${result.sent} push notification(s) sent!` });
         } else if (result.skipped > 0 && result.sent === 0) {
           showToast({ type: 'error', message: 'Alerts already sent for all overdue doses.' });
         } else if (result.failed > 0) {
@@ -260,7 +369,6 @@ export default function CaregiversScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Caregivers</Text>
         <TouchableOpacity style={styles.inviteBtn} onPress={() => setShowModal(true)}>
@@ -278,19 +386,34 @@ export default function CaregiversScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
+            {/* Pending requests directed at current user */}
+            {pendingRequests.length > 0 && (
+              <View style={styles.pendingSection}>
+                <Text style={styles.sectionTitle}>Requests for You</Text>
+                {pendingRequests.map((req) => (
+                  <PendingRequestCard
+                    key={req.id}
+                    request={req}
+                    onAccept={handleAccept}
+                    onDecline={handleDecline}
+                  />
+                ))}
+              </View>
+            )}
+
             {/* Info banner */}
             <View style={styles.banner}>
               <Text style={styles.bannerIcon}>🔔</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.bannerTitle}>Push Notifications</Text>
                 <Text style={styles.bannerSub}>
-                  Caregivers receive a push notification when a dose is missed by 2+ hours. They must have MediMind installed.
+                  Caregivers receive a push notification when a dose is missed by 2+ hours. They must accept your request and have MediMind installed.
                 </Text>
               </View>
             </View>
 
-            {/* Test button (visible when caregivers exist) */}
-            {caregivers.length > 0 && (
+            {/* Test button */}
+            {caregivers.some((c) => c.status === 'accepted') && (
               <TouchableOpacity
                 style={[styles.testBtn, testRunning && styles.testBtnDisabled]}
                 onPress={handleTestAlert}
@@ -349,11 +472,6 @@ const styles = StyleSheet.create({
     flex:            1,
     backgroundColor: Colors.background,
   },
-  centerContent: {
-    alignItems:     'center',
-    justifyContent: 'center',
-  },
-
   header: {
     flexDirection:     'row',
     justifyContent:    'space-between',
@@ -378,22 +496,86 @@ const styles = StyleSheet.create({
     fontSize:   Typography.fontSizeSM,
     fontWeight: Typography.fontWeightSemibold,
   },
-
   list: {
     paddingHorizontal: Spacing.md,
     paddingBottom:     Spacing.xxl,
     gap:               Spacing.sm,
   },
 
+  // pending requests section
+  pendingSection: {
+    marginBottom: Spacing.sm,
+    gap:          Spacing.sm,
+  },
+  pendingCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius:    Radius.md,
+    padding:         Spacing.md,
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    borderWidth:     1.5,
+    borderColor:     '#FDE68A',
+    gap:             Spacing.sm,
+  },
+  pendingIcon: {
+    marginTop: 2,
+  },
+  pendingBody: { flex: 1 },
+  pendingTitle: {
+    fontSize:   Typography.fontSizeMD,
+    fontWeight: Typography.fontWeightSemibold,
+    color:      Colors.textPrimary,
+  },
+  pendingSub: {
+    fontSize:   Typography.fontSizeSM,
+    color:      Colors.textSecondary,
+    marginTop:  2,
+  },
+  pendingRel: {
+    fontWeight: Typography.fontWeightSemibold,
+    color:      Colors.textPrimary,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    gap:           Spacing.sm,
+    marginTop:     Spacing.sm,
+  },
+  acceptBtn: {
+    flex:            1,
+    backgroundColor: Colors.primary,
+    borderRadius:    Radius.sm,
+    paddingVertical: Spacing.xs + 2,
+    alignItems:      'center',
+  },
+  acceptBtnText: {
+    color:      Colors.white,
+    fontSize:   Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightSemibold,
+  },
+  declineBtn: {
+    flex:            1,
+    borderWidth:     1.5,
+    borderColor:     Colors.border,
+    borderRadius:    Radius.sm,
+    paddingVertical: Spacing.xs + 2,
+    alignItems:      'center',
+    backgroundColor: Colors.white,
+  },
+  declineBtnText: {
+    color:      Colors.textSecondary,
+    fontSize:   Typography.fontSizeSM,
+    fontWeight: Typography.fontWeightMedium,
+  },
+
   // banner
   banner: {
-    flexDirection:     'row',
-    alignItems:        'flex-start',
-    backgroundColor:   Colors.primaryLight,
-    borderRadius:      Radius.md,
-    padding:           Spacing.md,
-    gap:               Spacing.sm,
-    marginBottom:      Spacing.sm,
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    backgroundColor: Colors.primaryLight,
+    borderRadius:    Radius.md,
+    padding:         Spacing.md,
+    gap:             Spacing.sm,
+    marginBottom:    Spacing.sm,
   },
   bannerIcon:  { fontSize: 22 },
   bannerTitle: {
@@ -410,16 +592,16 @@ const styles = StyleSheet.create({
 
   // test button
   testBtn: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    justifyContent:    'center',
-    borderWidth:       1.5,
-    borderColor:       Colors.primary,
-    borderRadius:      Radius.md,
-    paddingVertical:   Spacing.sm,
-    backgroundColor:   Colors.white,
-    marginBottom:      Spacing.sm,
-    minHeight:         44,
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    borderWidth:     1.5,
+    borderColor:     Colors.primary,
+    borderRadius:    Radius.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.white,
+    marginBottom:    Spacing.sm,
+    minHeight:       44,
   },
   testBtnDisabled: { opacity: 0.6 },
   testBtnText: {
@@ -442,23 +624,38 @@ const styles = StyleSheet.create({
     elevation:       1,
   },
   avatar: {
-    width:           48,
-    height:          48,
-    borderRadius:    24,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginRight:     Spacing.sm,
+    width:          48,
+    height:         48,
+    borderRadius:   24,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginRight:    Spacing.sm,
   },
   avatarText: {
     color:      Colors.white,
     fontSize:   Typography.fontSizeMD,
     fontWeight: Typography.fontWeightBold,
   },
-  cardBody:   { flex: 1 },
+  cardBody:    { flex: 1 },
+  cardNameRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            Spacing.xs,
+    flexWrap:       'wrap',
+  },
   caregiverName: {
     fontSize:   Typography.fontSizeMD,
     fontWeight: Typography.fontWeightSemibold,
     color:      Colors.textPrimary,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical:   2,
+    borderRadius:      Radius.full,
+  },
+  statusText: {
+    fontSize:   10,
+    fontWeight: Typography.fontWeightSemibold,
   },
   caregiverRole: {
     fontSize:  Typography.fontSizeSM,
@@ -470,16 +667,16 @@ const styles = StyleSheet.create({
     marginTop:     Spacing.xs,
   },
   phoneBadge: {
-    backgroundColor: Colors.background,
-    borderRadius:    Radius.full,
+    backgroundColor:   Colors.background,
+    borderRadius:      Radius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical:   2,
-    borderWidth:     1,
-    borderColor:     Colors.border,
+    borderWidth:       1,
+    borderColor:       Colors.border,
   },
   phoneBadgeText: {
-    fontSize:   Typography.fontSizeXS,
-    color:      Colors.textSecondary,
+    fontSize: Typography.fontSizeXS,
+    color:    Colors.textSecondary,
   },
   deleteBtn: {
     width:           32,
@@ -494,8 +691,8 @@ const styles = StyleSheet.create({
 
   // empty state
   empty: {
-    alignItems:   'center',
-    paddingTop:   Spacing.xl,
+    alignItems:    'center',
+    paddingTop:    Spacing.xl,
     paddingBottom: Spacing.xl,
   },
   emptyIcon:  { fontSize: 52, marginBottom: Spacing.md },
@@ -506,15 +703,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   emptySub: {
-    fontSize:     Typography.fontSizeSM,
-    color:        Colors.textSecondary,
-    textAlign:    'center',
-    lineHeight:   20,
-    marginBottom: Spacing.lg,
+    fontSize:          Typography.fontSizeSM,
+    color:             Colors.textSecondary,
+    textAlign:         'center',
+    lineHeight:        20,
+    marginBottom:      Spacing.lg,
     paddingHorizontal: Spacing.md,
   },
   emptyAddBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor:   Colors.primary,
     paddingHorizontal: Spacing.lg,
     paddingVertical:   Spacing.sm + 2,
     borderRadius:      Radius.full,
@@ -525,27 +722,29 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeightSemibold,
   },
 
-  // alert history
-  alertSection: {
-    marginTop:         Spacing.lg,
-    backgroundColor:   Colors.white,
-    borderRadius:      Radius.md,
-    padding:           Spacing.md,
-    shadowColor:       '#000',
-    shadowOffset:      { width: 0, height: 1 },
-    shadowOpacity:     0.05,
-    shadowRadius:      4,
-    elevation:         1,
-  },
+  // section title
   sectionTitle: {
     fontSize:     Typography.fontSizeMD,
     fontWeight:   Typography.fontWeightSemibold,
     color:        Colors.textPrimary,
     marginBottom: Spacing.sm,
   },
+
+  // alert history
+  alertSection: {
+    marginTop:       Spacing.lg,
+    backgroundColor: Colors.white,
+    borderRadius:    Radius.md,
+    padding:         Spacing.md,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 1 },
+    shadowOpacity:   0.05,
+    shadowRadius:    4,
+    elevation:       1,
+  },
   alertRow: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
+    flexDirection:   'row',
+    alignItems:      'flex-start',
     paddingVertical: Spacing.sm,
     borderTopWidth:  1,
     borderTopColor:  Colors.border,
@@ -560,11 +759,8 @@ const styles = StyleSheet.create({
     flexShrink:      0,
   },
   alertBody:  { flex: 1 },
-  alertTitle: {
-    fontSize: Typography.fontSizeSM,
-    color:    Colors.textPrimary,
-  },
-  alertBold: { fontWeight: Typography.fontWeightSemibold },
+  alertTitle: { fontSize: Typography.fontSizeSM, color: Colors.textPrimary },
+  alertBold:  { fontWeight: Typography.fontWeightSemibold },
   alertSub: {
     fontSize:  Typography.fontSizeXS,
     color:     Colors.textMuted,

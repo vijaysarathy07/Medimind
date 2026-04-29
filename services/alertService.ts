@@ -9,7 +9,7 @@ type ReminderRow = {
   medicines:      { id: string; name: string } | { id: string; name: string }[];
 };
 
-type CaregiverRow = { id: string; name: string; phone: string; fcm_token: string | null };
+type CaregiverRow = { id: string; name: string; phone: string; expo_push_token: string | null };
 
 // ─── helpers ─────────────────────────────────────────────────
 
@@ -67,8 +67,9 @@ export async function checkAndSendAlerts(): Promise<AlertCheckResult> {
   // 2. Caregivers for this user
   const { data: caregivers, error: careErr } = await supabase
     .from('caregivers')
-    .select('id, name, phone, fcm_token')
-    .eq('user_id', user.id);
+    .select('id, name, phone, expo_push_token')
+    .eq('user_id', user.id)
+    .eq('status', 'accepted');
 
   if (careErr) throw new Error(`Caregiver query failed: ${careErr.message}`);
   if (!caregivers?.length) return { status: 'no_caregivers' };
@@ -128,27 +129,26 @@ async function sendIfNotAlreadySent(
 
   if (existing) return 'skipped';
 
-  // Get FCM token from caregiver record, or look up from users table by phone
-  let fcmToken = caregiver.fcm_token;
-  if (!fcmToken) {
+  let pushToken = caregiver.expo_push_token;
+  if (!pushToken) {
     const digits = caregiver.phone.replace(/\D/g, '').slice(-10);
     const { data: caregiverUser } = await supabase
       .from('users')
-      .select('fcm_token')
+      .select('expo_push_token')
       .like('phone', `%${digits}`)
       .maybeSingle();
-    fcmToken = caregiverUser?.fcm_token ?? null;
+    pushToken = caregiverUser?.expo_push_token ?? null;
   }
 
-  if (!fcmToken) {
-    throw new Error(`${caregiver.name} has no FCM token — they need to install the app.`);
+  if (!pushToken) {
+    throw new Error(`${caregiver.name} has no push token — they need to install the app.`);
   }
 
-  const { error: fcmErr } = await supabase.functions.invoke('send-fcm-alert', {
+  const { error: pushErr } = await supabase.functions.invoke('send-fcm-alert', {
     body: {
-      fcm_token: fcmToken,
-      title:     '⚠️ Missed Dose Alert',
-      body:      `${patientName} missed their ${medicine.name} dose scheduled at ${fmt12(reminder.scheduled_time)}.`,
+      expo_push_token: pushToken,
+      title:           '⚠️ Missed Dose Alert',
+      body:            `${patientName} missed their ${medicine.name} dose scheduled at ${fmt12(reminder.scheduled_time)}.`,
       data: {
         type:           'missed_dose',
         medicine_name:  medicine.name,
@@ -158,8 +158,8 @@ async function sendIfNotAlreadySent(
     },
   });
 
-  if (fcmErr) {
-    throw new Error(`FCM alert failed for ${caregiver.name} / ${medicine.name}: ${fcmErr.message}`);
+  if (pushErr) {
+    throw new Error(`Push alert failed for ${caregiver.name} / ${medicine.name}: ${pushErr.message}`);
   }
 
   const { error: logErr } = await supabase.from('caregiver_alerts').insert({

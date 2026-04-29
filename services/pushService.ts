@@ -2,19 +2,12 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { supabase } from './supabase';
 
-/**
- * Gets the raw FCM device token, saves it to the signed-in user's profile,
- * and also updates any caregiver records whose phone matches this user's phone.
- * Call this once after sign-in and whenever the token refreshes.
- */
-export async function registerAndSaveFCMToken(): Promise<void> {
+export async function registerAndSavePushToken(): Promise<void> {
   if (Platform.OS === 'web') return;
 
   const { status } = await Notifications.getPermissionsAsync();
-  console.log('[FCM] Permission status:', status);
   if (status !== 'granted') {
     const { status: newStatus } = await Notifications.requestPermissionsAsync();
-    console.log('[FCM] Requested permission, new status:', newStatus);
     if (newStatus !== 'granted') return;
   }
 
@@ -22,25 +15,24 @@ export async function registerAndSaveFCMToken(): Promise<void> {
   try {
     const pushToken = await Notifications.getDevicePushTokenAsync();
     token = pushToken.data as string;
-    console.log('[FCM] Got token:', token ? token.slice(0, 20) + '...' : 'EMPTY');
+    console.log('[Push] Expo push token:', token.slice(0, 30) + '...');
   } catch (err) {
-    console.warn('[FCM] Could not get device push token:', err);
+    console.warn('[Push] Could not get Expo push token:', err);
     return;
   }
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { console.warn('[FCM] No user found'); return; }
+  if (!user) { console.warn('[Push] No user found'); return; }
 
   const { error } = await supabase
     .from('users')
-    .update({ fcm_token: token })
+    .update({ expo_push_token: token })
     .eq('id', user.id);
 
   if (error) {
-    console.warn('[FCM] Failed to save token to users:', error.message);
+    console.warn('[Push] Failed to save token to users:', error.message);
     return;
   }
-  console.log('[FCM] Token saved to users table');
 
   const { data: profile } = await supabase
     .from('users')
@@ -48,31 +40,21 @@ export async function registerAndSaveFCMToken(): Promise<void> {
     .eq('id', user.id)
     .single();
 
-  console.log('[FCM] User phone:', profile?.phone ?? 'NULL');
-
   if (profile?.phone) {
-    const digits = profile.phone.replace(/\D/g, '');
-    const last10 = digits.slice(-10);
-
-    const { error: careErr } = await supabase
+    const last10 = profile.phone.replace(/\D/g, '').slice(-10);
+    await supabase
       .from('caregivers')
-      .update({ fcm_token: token })
+      .update({ expo_push_token: token })
       .like('phone', `%${last10}`);
-    console.log('[FCM] Caregiver update error:', careErr?.message ?? 'none');
-    console.log('[FCM] Matching caregivers with last10:', last10);
   }
 }
 
-/**
- * Listens for FCM token refreshes and re-saves the updated token.
- * Returns an unsubscribe function — call it on sign-out or unmount.
- */
 export function listenForTokenRefresh(): () => void {
   const sub = Notifications.addPushTokenListener(async ({ data: token }) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || !token) return;
 
-    await supabase.from('users').update({ fcm_token: token }).eq('id', user.id);
+    await supabase.from('users').update({ expo_push_token: token }).eq('id', user.id);
 
     const { data: profile } = await supabase
       .from('users')
@@ -83,7 +65,7 @@ export function listenForTokenRefresh(): () => void {
     if (profile?.phone) {
       await supabase
         .from('caregivers')
-        .update({ fcm_token: token })
+        .update({ expo_push_token: token })
         .eq('phone', profile.phone);
     }
   });
