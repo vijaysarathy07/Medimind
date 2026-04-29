@@ -229,7 +229,7 @@ export default function CaregiversScreen() {
         showToast({ type: 'error', message: 'No caregivers added yet.' });
       } else {
         if (result.sent > 0) {
-          showToast({ type: 'success', message: `${result.sent} WhatsApp alert(s) sent!` });
+          showToast({ type: 'success', message: `${result.sent} push notification(s) sent to caregiver(s)!` });
         } else if (result.skipped > 0 && result.sent === 0) {
           showToast({ type: 'error', message: 'Alerts already sent for all overdue doses.' });
         } else if (result.failed > 0) {
@@ -280,11 +280,11 @@ export default function CaregiversScreen() {
           <>
             {/* Info banner */}
             <View style={styles.banner}>
-              <Text style={styles.bannerIcon}>🔐</Text>
+              <Text style={styles.bannerIcon}>🔔</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>WhatsApp Alerts</Text>
+                <Text style={styles.bannerTitle}>Push Notifications</Text>
                 <Text style={styles.bannerSub}>
-                  Caregivers receive a WhatsApp message when a dose is missed by 2+ hours.
+                  Caregivers receive a push notification when a dose is missed by 2+ hours. They must have MediMind installed.
                 </Text>
               </View>
             </View>

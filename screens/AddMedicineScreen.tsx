@@ -189,7 +189,9 @@ export default function AddMedicineScreen({ navigation }: Props) {
       setShowSuccess(true);
     } catch (err: unknown) {
       setSaving(false);
-      const msg = err instanceof Error ? err.message : 'Something went wrong.';
+      const msg = err instanceof Error
+        ? err.message
+        : (err as any)?.message ?? JSON.stringify(err);
       Alert.alert('Could not save', msg);
     }
   }

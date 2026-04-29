@@ -9,7 +9,7 @@ type ReminderRow = {
   medicines:      { id: string; name: string } | { id: string; name: string }[];
 };
 
-type CaregiverRow = { id: string; name: string; phone: string };
+type CaregiverRow = { id: string; name: string; phone: string; fcm_token: string | null };
 
 // ─── helpers ─────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ export async function checkAndSendAlerts(): Promise<AlertCheckResult> {
   // 2. Caregivers for this user
   const { data: caregivers, error: careErr } = await supabase
     .from('caregivers')
-    .select('id, name, phone')
+    .select('id, name, phone, fcm_token')
     .eq('user_id', user.id);
 
   if (careErr) throw new Error(`Caregiver query failed: ${careErr.message}`);
@@ -128,18 +128,38 @@ async function sendIfNotAlreadySent(
 
   if (existing) return 'skipped';
 
-  const { error: fnErr, data: fnData } = await supabase.functions.invoke('send-whatsapp-alert', {
+  // Get FCM token from caregiver record, or look up from users table by phone
+  let fcmToken = caregiver.fcm_token;
+  if (!fcmToken) {
+    const digits = caregiver.phone.replace(/\D/g, '').slice(-10);
+    const { data: caregiverUser } = await supabase
+      .from('users')
+      .select('fcm_token')
+      .like('phone', `%${digits}`)
+      .maybeSingle();
+    fcmToken = caregiverUser?.fcm_token ?? null;
+  }
+
+  if (!fcmToken) {
+    throw new Error(`${caregiver.name} has no FCM token — they need to install the app.`);
+  }
+
+  const { error: fcmErr } = await supabase.functions.invoke('send-fcm-alert', {
     body: {
-      caregiver_phone: caregiver.phone,
-      caregiver_name:  caregiver.name,
-      patient_name:    patientName,
-      medicine_name:   medicine.name,
-      scheduled_time:  reminder.scheduled_time,
+      fcm_token: fcmToken,
+      title:     '⚠️ Missed Dose Alert',
+      body:      `${patientName} missed their ${medicine.name} dose scheduled at ${fmt12(reminder.scheduled_time)}.`,
+      data: {
+        type:           'missed_dose',
+        medicine_name:  medicine.name,
+        patient_name:   patientName,
+        scheduled_time: reminder.scheduled_time,
+      },
     },
   });
 
-  if (fnErr) {
-    throw new Error(`Edge function error for ${caregiver.name} / ${medicine.name}: ${fnErr.message}`);
+  if (fcmErr) {
+    throw new Error(`FCM alert failed for ${caregiver.name} / ${medicine.name}: ${fcmErr.message}`);
   }
 
   const { error: logErr } = await supabase.from('caregiver_alerts').insert({

@@ -15,6 +15,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { supabase } from './services/supabase';
 import { Colors } from './constants/theme';
 import { registerAlertTask } from './services/backgroundTask';
+import { registerAndSaveFCMToken, listenForTokenRefresh } from './services/fcmService';
 
 const ONBOARDING_KEY = '@medimind/onboarding_done';
 
@@ -46,16 +47,24 @@ export default function App() {
     // 2. Check existing Supabase session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      if (data.session) registerAndSaveFCMToken();
     });
 
     // 3. Listen for auth changes (sign in / sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) registerAndSaveFCMToken();
     });
+
+    // 4. Keep FCM token fresh if it rotates
+    const unsubscribeTokenRefresh = listenForTokenRefresh();
 
     registerAlertTask();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      unsubscribeTokenRefresh();
+    };
   }, []);
 
   async function handleOnboardingComplete() {

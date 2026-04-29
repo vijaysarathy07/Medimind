@@ -27,6 +27,7 @@ create table public.users (
   id           uuid primary key references auth.users (id) on delete cascade,
   name         text        not null,
   phone        text,
+  fcm_token    text,
   created_at   timestamptz not null default now()
 );
 
@@ -67,6 +68,7 @@ create table public.caregivers (
   name         text not null,
   phone        text not null,
   relationship text not null,    -- e.g. "Spouse", "Doctor", "Nurse"
+  fcm_token    text,
   created_at   timestamptz not null default now()
 );
 
@@ -119,7 +121,9 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data->>'name', ''),
     coalesce(new.raw_user_meta_data->>'phone', null)
-  );
+  )
+  on conflict (id) do update
+    set phone = coalesce(excluded.phone, public.users.phone);
   return new;
 end;
 $$;

@@ -13,6 +13,7 @@ type Mode = 'signin' | 'signup';
 export default function AuthScreen({ onAuth }: { onAuth: () => void }) {
   const [mode,     setMode]     = useState<Mode>('signin');
   const [name,     setName]     = useState('');
+  const [phone,    setPhone]    = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
@@ -26,6 +27,10 @@ export default function AuthScreen({ onAuth }: { onAuth: () => void }) {
       Alert.alert('Required', 'Please enter your name.');
       return;
     }
+    if (mode === 'signup' && !phone.trim()) {
+      Alert.alert('Required', 'Please enter your phone number.');
+      return;
+    }
     if (password.length < 6) {
       Alert.alert('Weak password', 'Password must be at least 6 characters.');
       return;
@@ -34,15 +39,24 @@ export default function AuthScreen({ onAuth }: { onAuth: () => void }) {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data: { user: newUser }, error } = await supabase.auth.signUp({
           email:    email.trim(),
           password,
-          options:  { data: { name: name.trim() } },
+          options:  { data: { name: name.trim(), phone: phone.trim() } },
         });
         if (error) throw error;
+
+        if (newUser) {
+          await supabase.from('users').upsert({
+            id:    newUser.id,
+            name:  name.trim(),
+            phone: phone.trim(),
+          }, { onConflict: 'id' });
+        }
+
         Alert.alert(
-          'Account created! 🎉',
-          'Check your email for a confirmation link, then sign in.',
+          'Account created!',
+          'You can now sign in.',
           [{ text: 'OK', onPress: () => setMode('signin') }]
         );
       } else {
@@ -98,6 +112,16 @@ export default function AuthScreen({ onAuth }: { onAuth: () => void }) {
                   placeholder="Vijay Sarathy"
                   placeholderTextColor={Colors.textMuted}
                   autoCapitalize="words"
+                  returnKeyType="next"
+                />
+                <Text style={styles.label}>Phone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="+91 9876543210"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="phone-pad"
                   returnKeyType="next"
                 />
               </>

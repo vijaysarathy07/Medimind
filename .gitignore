@@ -37,6 +37,10 @@ yarn-error.*
 # IDE
 .idea/
 
+# Firebase credentials — never commit these
+service-account.json
+secrets.env
+
 # Supabase CLI temp
 supabase/.temp/
 
